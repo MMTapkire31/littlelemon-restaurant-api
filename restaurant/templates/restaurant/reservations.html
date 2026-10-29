@@ -1,0 +1,64 @@
+{% extends "restaurant/base.html" %}
+{% block title %}Reservations | Little Lemon{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Reservations</h1>
+  <p class="muted">Choose a date to view reservations, or view all bookings as JSON.</p>
+  <label for="filter-date">Reservations for date</label>
+  <input id="filter-date" type="date" value="{{ today }}">
+  <p id="status" class="muted" aria-live="polite">Loading…</p>
+  <div id="booking-table"></div>
+  <h2>Bookings API response (JSON)</h2>
+  <pre id="json-output" class="json-output">Loading…</pre>
+  <p>API endpoints: <code>/bookings/</code> for all bookings and <code>/bookings/?date=YYYY-MM-DD</code> for a specific date.</p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const dateInput = document.getElementById("filter-date");
+  const status = document.getElementById("status");
+  const table = document.getElementById("booking-table");
+  const jsonOutput = document.getElementById("json-output");
+
+  async function loadBookings() {
+    const selectedDate = dateInput.value;
+    const url = selectedDate ? `/bookings/?date=${encodeURIComponent(selectedDate)}` : "/bookings/";
+    status.textContent = "Loading reservations…";
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Request failed");
+      jsonOutput.textContent = JSON.stringify(data, null, 2);
+      table.replaceChildren();
+      if (data.length === 0) {
+        status.textContent = selectedDate ? `No Booking for ${selectedDate}.` : "No bookings yet.";
+        return;
+      }
+      status.textContent = `${data.length} booking(s) found.`;
+      const tbl = document.createElement("table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>First name</th><th>Reservation date</th><th>Reservation slot</th></tr>";
+      tbl.appendChild(thead);
+      const tbody = document.createElement("tbody");
+      data.forEach(item => {
+        const row = document.createElement("tr");
+        [item.first_name, item.reservation_date, item.reservation_slot].forEach(value => {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.appendChild(cell);
+        });
+        tbody.appendChild(row);
+      });
+      tbl.appendChild(tbody);
+      table.appendChild(tbl);
+    } catch (error) {
+      status.textContent = "Could not load bookings. Check that the server and database are running.";
+      jsonOutput.textContent = JSON.stringify({error: error.message}, null, 2);
+    }
+  }
+  dateInput.addEventListener("change", loadBookings);
+  loadBookings();
+})();
+</script>
+{% endblock %}

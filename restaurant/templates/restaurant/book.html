@@ -1,0 +1,76 @@
+{% extends "restaurant/base.html" %}
+{% block title %}Book a Table | Little Lemon{% endblock %}
+{% block content %}
+<section class="panel">
+  <h1>Book a table</h1>
+  <p class="muted">Select a date to see which reservation times are available.</p>
+  {% if message %}<div class="notice" role="alert">{{ message }}</div>{% endif %}
+  <form method="post" id="booking-form">
+    {% csrf_token %}
+    <label for="first_name">First name</label>
+    <input id="first_name" name="first_name" type="text" maxlength="100" required placeholder="Your first name">
+    <label for="reservation_date">Reservation date</label>
+    <input id="reservation_date" name="reservation_date" type="date" min="{{ today }}" value="{{ today }}" required>
+    <label for="reservation_slot">Reservation slot</label>
+    <select id="reservation_slot" name="reservation_slot" required>
+      <option value="">Choose a time</option>
+      {% for slot in slots %}<option value="{{ slot }}">{{ slot }}</option>{% endfor %}
+    </select>
+    <button class="button" type="submit">Make reservation</button>
+  </form>
+  <p id="availability-message" class="muted" aria-live="polite"></p>
+</section>
+<section class="panel reservations-preview">
+  <h2>Current reservations</h2>
+  <p class="muted">Bookings for the selected date.</p>
+  <div id="current-bookings">Loading reservations…</div>
+  <p><a href="/reservations/">View all reservations →</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const dateInput = document.getElementById("reservation_date");
+  const slotSelect = document.getElementById("reservation_slot");
+  const list = document.getElementById("current-bookings");
+  const status = document.getElementById("availability-message");
+
+  async function refreshBookings() {
+    const selectedDate = dateInput.value;
+    if (!selectedDate) return;
+    status.textContent = "Checking availability…";
+    try {
+      const response = await fetch(`/bookings/?date=${encodeURIComponent(selectedDate)}`);
+      if (!response.ok) throw new Error("Could not load bookings");
+      const bookings = await response.json();
+      const bookedSlots = new Set(bookings.map(item => item.reservation_slot));
+      [...slotSelect.options].forEach(option => {
+        if (!option.value) return;
+        option.disabled = bookedSlots.has(option.value);
+        option.textContent = option.value + (option.disabled ? " — Booked" : "");
+      });
+      slotSelect.value = "";
+      list.replaceChildren();
+      if (bookings.length === 0) {
+        list.textContent = "No bookings for this date.";
+      } else {
+        const ul = document.createElement("ul");
+        ul.className = "booking-list";
+        bookings.forEach(item => {
+          const li = document.createElement("li");
+          li.textContent = `${item.reservation_slot} — ${item.first_name}`;
+          ul.appendChild(li);
+        });
+        list.appendChild(ul);
+      }
+      status.textContent = `${bookings.length} reservation(s) for ${selectedDate}. Booked slots are disabled.`;
+    } catch (error) {
+      status.textContent = "Unable to refresh availability. Please reload the page.";
+      list.textContent = "Reservations could not be loaded.";
+    }
+  }
+  dateInput.addEventListener("change", refreshBookings);
+  refreshBookings();
+})();
+</script>
+{% endblock %}
